@@ -1,0 +1,19 @@
+# QNX Cross-Build Artifacts
+ports/sqlite/build/
+ports/sqlite/sqlite-amalgamation-*/
+ports/sqlite/*.zip
+ports/micropython/build/
+ports/micropython/micropython-*/
+
+# Database & Temporary Files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# OS / Editor Files
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+.vscode/

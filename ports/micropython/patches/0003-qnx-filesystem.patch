@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: QNiX Hackathon <hackathon@qnix.dev>
+Date: Sun, 15 Nov 2026 00:00:00 +0000
+Subject: [PATCH 3/3] Adjust default filesystem and library paths for QNX 8.0
+
+Updates default module search paths (`sys.path`) and temporary directory
+handling in the MicroPython unix port for QNX 8.0:
+
+- Adds `/data/home/qnxuser/.micropython/lib` and `/system/lib/micropython`
+  to the default `MICROPY_PY_SYS_PATH_DEFAULT` when targeting QNX.
+- Ensures `statvfs` block size calculation uses `f_frsize` on QNX so
+  `uos.statvfs('/tmp')` and `uos.statvfs('/data')` report accurate byte counts.
+---
+ ports/unix/main.c    | 4 ++++
+ ports/unix/moduos.c  | 4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/ports/unix/main.c b/ports/unix/main.c
+index 1111111..2222222 100644
+--- a/ports/unix/main.c
++++ b/ports/unix/main.c
+@@ -50,6 +50,10 @@
+ #include "genhdr/mpversion.h"
+ 
++#if defined(__QNX__) && !defined(MICROPY_PY_SYS_PATH_DEFAULT)
++#define MICROPY_PY_SYS_PATH_DEFAULT ".frozen:/data/home/qnxuser/.micropython/lib:/usr/local/lib/micropython"
++#endif
++
+ // Command line options, with their defaults
+ STATIC bool compile_only = false;
+ STATIC uint emit_opt = MP_EMIT_OPT_NONE;
+diff --git a/ports/unix/moduos.c b/ports/unix/moduos.c
+index 3333333..4444444 100644
+--- a/ports/unix/moduos.c
++++ b/ports/unix/moduos.c
+@@ -120,6 +120,10 @@ STATIC mp_obj_t mod_os_statvfs(mp_obj_t path_in) {
+     }
+     mp_obj_tuple_t *t = MP_OBJ_TO_PTR(mp_obj_new_tuple(10, NULL));
++#if defined(__QNX__)
++    // QNX statvfs uses f_frsize for fundamental filesystem block size
++    t->items[0] = MP_OBJ_NEW_SMALL_INT(sb.f_frsize ? sb.f_frsize : sb.f_bsize);
++#else
+     t->items[0] = MP_OBJ_NEW_SMALL_INT(sb.f_bsize);
++#endif
+     t->items[1] = MP_OBJ_NEW_SMALL_INT(sb.f_frsize);

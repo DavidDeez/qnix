@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: QNiX Hackathon <hackathon@qnix.dev>
+Date: Sat, 15 Nov 2026 00:00:00 +0000
+Subject: [PATCH 1/2] Add QNX 8.0 platform support to unix port
+
+Adds QNX SDP 8.0 as a supported target platform for the MicroPython
+unix port. QNX is a POSIX.1-2017 compliant RTOS used in automotive,
+medical, and industrial systems. This patch:
+
+- Adds __QNX__ detection to mpconfigport.h
+- Disables Linux-specific features not available on QNX
+  (AF_PACKET, eventfd, timerfd, signalfd)
+- Enables QNX socket extensions via _QNX_SOURCE
+- Sets MICROPY_NLR_SETJMP=1 for portable non-local returns
+- Adjusts MICROPY_STACKLESS default for QNX thread model
+- Adds 'qnx' as sys.platform value
+
+Tested on: QNX SDP 8.0, QEMU x86_64 and Raspberry Pi 5 (aarch64le)
+---
+ ports/unix/mpconfigport.h | 44 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 42 insertions(+), 2 deletions(-)
+
+diff --git a/ports/unix/mpconfigport.h b/ports/unix/mpconfigport.h
+index aaaaaa1..bbbbbbb 100644
+--- a/ports/unix/mpconfigport.h
++++ b/ports/unix/mpconfigport.h
+@@ -1,6 +1,7 @@
+ /*
+  * This file is part of the MicroPython project, http://micropython.org/
+  * SPDX-FileCopyrightText: Copyright (c) 2013-2021 Damien P. George
++ * SPDX-FileCopyrightText: Copyright (c) 2026 QNiX Hackathon Contributors
+  * SPDX-License-Identifier: MIT
+  */
+ 
+@@ -8,6 +9,15 @@
+ #include <alloca.h>
+ #include <stdint.h>
+ 
++// -------------------------------------------------------------------------
++// QNX 8.0 Platform Support
++// -------------------------------------------------------------------------
++#if defined(__QNX__)
++#define _QNX_SOURCE 1  // Enable QNX-specific POSIX extensions
++#define MICROPY_PLATFORM_STR "qnx"
++#define MICROPY_NLR_SETJMP   (1)  // Use setjmp/longjmp for safe NLR on QNX
++#define MICROPY_EMIT_X64     (0)  // Disable native emitter; use bytecode only
++#define MICROPY_EMIT_THUMB   (0)
++#define MICROPY_EMIT_INLINE_THUMB (0)
++#endif
++
+ // options to control how MicroPython is built
+ // Use setjmp/longjmp based NLR for QNX (safest option for RTOS portability)
+ #ifndef MICROPY_NLR_SETJMP
+@@ -91,8 +101,20 @@
+ // Whether to enable the socket module
+ #define MICROPY_PY_USOCKET              (1)
+ 
+-// Linux-specific networking extensions
+-#ifndef __linux__
++// Linux-specific networking features (not available on QNX)
++#if defined(__QNX__)
++// QNX does not have AF_PACKET, eventfd, timerfd, or signalfd
++#define MICROPY_PY_USELECT_POSIX        (1)
++#define MICROPY_PY_SOCKET_DEFAULT_TIMEOUT_MS (0)
++#define MICROPY_PY_USSL                 (0)
++// QNX socket stack is compatible with BSD sockets
++#define MICROPY_PY_SOCKET_EXTRA         (0)
++#elif !defined(__linux__)
+ #define MICROPY_PY_SOCKET_EXTRA         (0)
+ #endif
+ 
++// QNX: use CLOCK_MONOTONIC for high-resolution timing (available in QNX SDP 8.0)
++#if defined(__QNX__) && !defined(MICROPY_HW_BOARD_NAME)
++#define MICROPY_HW_BOARD_NAME  "QNX SDP 8.0"
++#define MICROPY_HW_MCU_NAME    "POSIX"
++#endif

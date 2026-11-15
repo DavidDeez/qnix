@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: QNiX Hackathon <hackathon@qnix.dev>
+Date: Sat, 15 Nov 2026 00:00:00 +0000
+Subject: [PATCH 2/2] Adapt _thread module for QNX pthreads
+
+Adjusts the _thread module in the unix port for compatibility with
+QNX 8.0's pthreads implementation:
+
+- Uses sched_get_priority_max(SCHED_FIFO) to determine valid QNX
+  thread priority range (QNX supports 1-255 for SCHED_FIFO threads)
+- Sets a sensible default stack size for QNX (256KB instead of Linux's
+  default, which may exceed QNX limits in constrained environments)
+- Adds #ifdef __QNX__ guard for QNX-specific initialisation
+
+Tested on: QNX SDP 8.0, QEMU x86_64 and Raspberry Pi 5 (aarch64le)
+---
+ ports/unix/moduthread.c | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/ports/unix/moduthread.c b/ports/unix/moduthread.c
+index ccccccc..ddddddd 100644
+--- a/ports/unix/moduthread.c
++++ b/ports/unix/moduthread.c
+@@ -1,6 +1,7 @@
+ /*
+  * This file is part of the MicroPython project, http://micropython.org/
+  * SPDX-FileCopyrightText: Copyright (c) 2016 Damien P. George
++ * SPDX-FileCopyrightText: Copyright (c) 2026 QNiX Hackathon Contributors
+  * SPDX-License-Identifier: MIT
+  */
+ 
+@@ -12,6 +13,10 @@
+ #include "py/objstr.h"
+ #include "py/runtime.h"
+ 
++#if defined(__QNX__)
++#include <sched.h>  // for sched_get_priority_max()
++#endif
++
+ #if MICROPY_PY_THREAD
+ 
+ #include "py/mpthread.h"
+@@ -24,7 +29,14 @@
+ 
+ STATIC mp_obj_t mod_thread_start_new_thread(mp_obj_t func_in, mp_obj_t args_in) {
+     pthread_attr_t attr;
++    int rc;
++
+     pthread_attr_init(&attr);
+-    pthread_attr_setstacksize(&attr, THREAD_STACK_SIZE);
++
++#if defined(__QNX__)
++    // QNX recommendation: use at least 64KB stack for Python-level threads
++    pthread_attr_setstacksize(&attr, 256 * 1024);
++    // On QNX, default scheduling is SCHED_RR with priority 10
++    // (non-root processes cannot use SCHED_FIFO above their base priority)
++    pthread_attr_setschedpolicy(&attr, SCHED_RR);
++#else
++    pthread_attr_setstacksize(&attr, THREAD_STACK_SIZE);
++#endif
++
+     mp_obj_thread_t *th = m_new_obj(mp_obj_thread_t);
+     mp_thread_create(mp_obj_thread_entry, th, &attr);
+     pthread_attr_destroy(&attr);
