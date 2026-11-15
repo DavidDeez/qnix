@@ -1,0 +1,59 @@
+name: QNX 8.0 Cross-Build & Demo Verification
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  verify-demo-and-patches:
+    name: Verify Sensor Logger Demo & Patch Integrity
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate Makefile syntax (SQLite & MicroPython)
+        run: |
+          make -n -C ports/sqlite QNX_TARGET=/tmp/qnx_target QNX_HOST=/tmp/qnx_host CPU=aarch64le build
+          make -n -C ports/sqlite QNX_TARGET=/tmp/qnx_target QNX_HOST=/tmp/qnx_host CPU=x86_64 build
+          make -n -C ports/micropython QNX_TARGET=/tmp/qnx_target QNX_HOST=/tmp/qnx_host CPU=aarch64le build
+          make -n -C ports/micropython QNX_TARGET=/tmp/qnx_target QNX_HOST=/tmp/qnx_host CPU=x86_64 build
+
+      - name: Run Sensor Logger Demo & Verify SQLite Schema
+        env:
+          QNX_DEMO_RUNTIME_S: "2.5"
+          QNX_STATS_INTERVAL: "10"
+          QNX_DB_PATH: "/tmp/qnx_sensor_log.db"
+        run: |
+          python3 demo/sensor_logger/main.py
+          sqlite3 /tmp/qnx_sensor_log.db < demo/sensor_logger/schema.sql
+          sqlite3 -header -column /tmp/qnx_sensor_log.db "SELECT * FROM stats_per_second;"
+
+  qnx-cross-build:
+    name: QNX SDP 8.0 Cross-Compile (${{ matrix.cpu }})
+    runs-on: self-hosted
+    if: ${{ vars.ENABLE_QNX_RUNNER == 'true' }}
+    strategy:
+      matrix:
+        cpu: [aarch64le, x86_64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build & Install SQLite 3.47.0 for QNX 8.0
+        run: |
+          source ~/qnx800/qnxsdp-env.sh
+          make -C ports/sqlite install CPU=${{ matrix.cpu }} -j$(nproc)
+
+      - name: Build & Install MicroPython 1.24.0 for QNX 8.0
+        run: |
+          source ~/qnx800/qnxsdp-env.sh
+          make -C ports/micropython install CPU=${{ matrix.cpu }} -j$(nproc)
