@@ -123,7 +123,7 @@ mpy-cross: clone submodules
 	@echo ">>> Building mpy-cross (host tool)..."
 	$(MAKE) -C $(MICROPYTHON_DIR)/mpy-cross
 
-## 5. Build MicroPython for QNX
+## 5. Build MicroPython for QNX (with native C sqlite3 user module)
 build: patch mpy-cross
 	@echo ">>> Building MicroPython $(MICROPYTHON_VERSION) for QNX (CPU=$(CPU))..."
 	mkdir -p $(BUILD_DIR)
@@ -132,6 +132,7 @@ build: patch mpy-cross
 	    CC="$(CC)" \
 	    AR="$(AR)" \
 	    STRIP="$(STRIP)" \
+	    USER_C_MODULES="$(CURDIR)/cmodules" \
 	    CFLAGS_EXTRA="$(QNX_CFLAGS)" \
 	    LDFLAGS_EXTRA="$(QNX_LDFLAGS)" \
 	    MICROPY_PY_USSL=0 \

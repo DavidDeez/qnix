@@ -29,6 +29,8 @@ class TestQnxPortRepository(unittest.TestCase):
             "ports/sqlite/README.md",
             "ports/micropython/Makefile",
             "ports/micropython/README.md",
+            "ports/micropython/cmodules/sqlite3/modsqlite3.c",
+            "ports/micropython/cmodules/sqlite3/micropython.mk",
             "ports/micropython/patches/0001-add-qnx-platform.patch",
             "ports/micropython/patches/0002-qnx-thread-support.patch",
             "ports/micropython/patches/0003-qnx-filesystem.patch",
@@ -55,6 +57,13 @@ class TestQnxPortRepository(unittest.TestCase):
         self.assertIn("-D_QNX_SOURCE", makefile)
         self.assertIn("-lsqlite3", makefile)
         self.assertIn("-lsocket", makefile)
+        self.assertIn("USER_C_MODULES", makefile)
+
+        modsqlite3_c = (REPO_ROOT / "ports/micropython/cmodules/sqlite3/modsqlite3.c").read_text(encoding="utf-8")
+        self.assertIn("MP_REGISTER_MODULE(MP_QSTR_sqlite3, mp_module_sqlite3);", modsqlite3_c)
+        self.assertIn("sqlite3_open_v2", modsqlite3_c)
+        self.assertIn("sqlite3_prepare_v2", modsqlite3_c)
+        self.assertIn("sqlite3_step", modsqlite3_c)
 
         patch1 = (REPO_ROOT / "ports/micropython/patches/0001-add-qnx-platform.patch").read_text(encoding="utf-8")
         self.assertIn('#define MICROPY_PLATFORM_STR "qnx"', patch1)

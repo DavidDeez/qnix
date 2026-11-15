@@ -73,9 +73,14 @@ batt:   min=13.4  max=14.1   avg=13.8 V
 │   └── micropython/              ← MicroPython 1.24 QNX port
 │       ├── Makefile              ← QNX cross-build Makefile
 │       ├── README.md             ← Build & run instructions
+│       ├── cmodules/
+│       │   └── sqlite3/          ← Native C `sqlite3` user module for MicroPython
+│       │       ├── modsqlite3.c  ← Wraps libsqlite3 (connect, execute, Cursor, fetch*)
+│       │       └── micropython.mk
 │       └── patches/              ← QNX platform patches
 │           ├── 0001-add-qnx-platform.patch
-│           └── 0002-qnx-thread-support.patch
+│           ├── 0002-qnx-thread-support.patch
+│           └── 0003-qnx-filesystem.patch
 │
 └── demo/
     ├── sensor_logger/
