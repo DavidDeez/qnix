@@ -39,10 +39,10 @@ This port builds SQLite as:
 
 # Create workspace
 mkdir -p ~/qnx_workspace && cd ~/qnx_workspace
-git clone https://github.com/<your-username>/qnix-hackathon.git
+git clone https://github.com/DavidDeez/qnix.git
 
 # Build Docker image (see qnx-ports/build-files docker/)
-cd ~/qnx_workspace/qnix-hackathon
+cd ~/qnx_workspace/qnix
 ./docker/docker-build-qnx-image.sh
 ./docker/docker-create-container.sh
 
@@ -62,8 +62,8 @@ sudo apt-get install -y make wget unzip
 source ~/qnx800/qnxsdp-env.sh
 
 # Clone this repo
-git clone https://github.com/<your-username>/qnix-hackathon.git
-cd qnix-hackathon
+git clone https://github.com/DavidDeez/qnix.git
+cd qnix
 
 # Build SQLite for all QNX targets
 make -C ports/sqlite install -j$(nproc)

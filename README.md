@@ -138,8 +138,8 @@ Full build and run instructions are in each port's `README.md`.
 
 ```bash
 # Clone this repo
-git clone https://github.com/<your-username>/qnix-hackathon.git
-cd qnix-hackathon
+git clone https://github.com/DavidDeez/qnix.git
+cd qnix
 
 # Build Docker image (from qnx-ports/build-files docker setup)
 # See https://github.com/qnx-ports/build-files/tree/main/docker
