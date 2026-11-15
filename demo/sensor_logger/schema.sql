@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS sensor_log (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     -- High-resolution timestamp in microseconds (from QNX CLOCK_MONOTONIC)
     timestamp_us INTEGER NOT NULL,
+    -- 64-bit hardware cycle counter from QNX ClockCycles() (<sys/neutrino.h>)
+    qnx_cycles   INTEGER NOT NULL DEFAULT 0,
+    -- Real-time scheduling loop jitter in microseconds
+    jitter_us    INTEGER NOT NULL DEFAULT 0,
     -- Vehicle speed in km/h
     speed_kmh    REAL    NOT NULL,
     -- Engine RPM

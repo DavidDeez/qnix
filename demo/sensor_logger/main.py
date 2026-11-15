@@ -50,6 +50,44 @@ except ImportError:
         def getrandbits(k):
             return _random.getrandbits(k)
 
+try:
+    import qnx_rt
+except ImportError:
+    # Fallback when running outside QNX MicroPython (e.g. host dry-run)
+    import time as _rt_time
+
+    class qnx_rt:
+        SCHED_FIFO = 1
+        SCHED_RR = 2
+        SCHED_OTHER = 3
+
+        @staticmethod
+        def clock_cycles():
+            return int(_rt_time.perf_counter_ns())
+
+        @staticmethod
+        def cycles_per_sec():
+            return 1_000_000_000
+
+        @staticmethod
+        def get_priority():
+            return 10
+
+        @staticmethod
+        def clock_period_ns():
+            return 1_000_000
+
+        @staticmethod
+        def sysinfo():
+            return {
+                "pid": os.getpid(),
+                "tid": 1,
+                "priority": 10,
+                "policy": "SCHED_RR",
+                "cycles_per_sec": 1_000_000_000,
+                "clock_cycles": int(_rt_time.perf_counter_ns()),
+            }
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -116,12 +154,14 @@ def init_db(conn):
     """Create sensor log table if it doesn't exist."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sensor_log (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp_us INTEGER NOT NULL,
-            speed_kmh   REAL    NOT NULL,
-            rpm         INTEGER NOT NULL,
-            temp_c      REAL    NOT NULL,
-            batt_v      REAL    NOT NULL
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp_us  INTEGER NOT NULL,
+            qnx_cycles    INTEGER NOT NULL DEFAULT 0,
+            jitter_us     INTEGER NOT NULL DEFAULT 0,
+            speed_kmh     REAL    NOT NULL,
+            rpm           INTEGER NOT NULL,
+            temp_c        REAL    NOT NULL,
+            batt_v        REAL    NOT NULL
         )
     """)
     conn.execute("""
@@ -132,12 +172,12 @@ def init_db(conn):
     print("[DB] SQLite version: {}".format(sqlite3.sqlite_version))
 
 
-def insert_reading(conn, ts_us, speed, rpm, temp, batt):
-    """Insert one sensor reading. Uses parameterised query (SQL injection safe)."""
+def insert_reading(conn, ts_us, qnx_cycles, jitter_us, speed, rpm, temp, batt):
+    """Insert one sensor reading with QNX hardware cycle count and loop jitter."""
     conn.execute(
-        "INSERT INTO sensor_log (timestamp_us, speed_kmh, rpm, temp_c, batt_v) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (ts_us, speed, rpm, temp, batt)
+        "INSERT INTO sensor_log (timestamp_us, qnx_cycles, jitter_us, speed_kmh, rpm, temp_c, batt_v) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (ts_us, qnx_cycles, jitter_us, speed, rpm, temp, batt)
     )
     # Note: we commit in batches (every STATS_INTERVAL rows) for performance
 
@@ -180,26 +220,33 @@ def rotate_if_needed(conn):
 # Display helpers
 # ---------------------------------------------------------------------------
 def banner():
+    info = qnx_rt.sysinfo()
     print()
-    print("=" * 60)
+    print("=" * 64)
     print("  QNX Vehicle Sensor Data Logger")
-    print("  SQLite + MicroPython on QNX SDP 8.0")
-    print("=" * 60)
-    print("  Platform : {}".format(sys.platform))
-    print("  Python   : {}".format(sys.version))
-    print("  Database : {}".format(DB_PATH))
-    print("  Interval : {} ms".format(LOG_INTERVAL_MS))
-    print("=" * 60)
+    print("  SQLite + MicroPython + qnx_rt (<sys/neutrino.h>) on QNX 8.0")
+    print("=" * 64)
+    print("  Platform      : {}".format(sys.platform))
+    print("  Python        : {}".format(sys.version))
+    print("  QNX Thread    : PID={} TID={} Policy={} Priority={}".format(
+        info["pid"], info["tid"], info["policy"], info["priority"]
+    ))
+    print("  ClockCycles   : {} Hz (Kernel Tick: {} ns)".format(
+        info["cycles_per_sec"], qnx_rt.clock_period_ns()
+    ))
+    print("  Database      : {}".format(DB_PATH))
+    print("  Interval      : {} ms".format(LOG_INTERVAL_MS))
+    print("=" * 64)
     print()
 
 
-def print_reading(elapsed_ms, speed, rpm, temp, batt):
-    """Print a single sensor reading line."""
+def print_reading(elapsed_ms, jitter_us, speed, rpm, temp, batt):
+    """Print a single sensor reading line with QNX real-time scheduling jitter."""
     minutes = (elapsed_ms // 60000)
     seconds = (elapsed_ms % 60000) // 1000
     millis  = elapsed_ms % 1000
-    print("[{:02d}:{:02d}.{:03d}] speed={:5.1f} km/h  rpm={:4d}  temp={:4.1f}C  batt={:.2f}V".format(
-        minutes, seconds, millis,
+    print("[{:02d}:{:02d}.{:03d} | jitter={:+4d}us] speed={:5.1f} km/h  rpm={:4d}  temp={:4.1f}C  batt={:.2f}V".format(
+        minutes, seconds, millis, jitter_us,
         speed, rpm, temp, batt
     ))
 
@@ -236,14 +283,17 @@ def main():
     sim = VehicleSimulator()
     sample_count = 0
     start_us = utime.ticks_us()
+    expected_us = start_us
 
     print("[LOG] Starting sensor logging. Press Ctrl+C to stop.\n")
 
     try:
         while True:
-            # --- Real-time timing: use QNX CLOCK_MONOTONIC via utime ---
+            # --- Real-time timing: use QNX CLOCK_MONOTONIC + ClockCycles() ---
             tick_start = utime.ticks_us()
+            hw_cycles  = qnx_rt.clock_cycles()
             elapsed_ms = utime.ticks_diff(tick_start, start_us) // 1000
+            jitter_us  = utime.ticks_diff(tick_start, expected_us)
 
             # Stop after DEMO_RUNTIME_S seconds
             if elapsed_ms >= DEMO_RUNTIME_S * 1000:
@@ -253,11 +303,11 @@ def main():
             speed, rpm, temp, batt = sim.tick()
 
             # --- Store in SQLite ---
-            insert_reading(conn, tick_start, speed, rpm, temp, batt)
+            insert_reading(conn, tick_start, hw_cycles, jitter_us, speed, rpm, temp, batt)
             sample_count += 1
 
             # --- Print reading every sample ---
-            print_reading(elapsed_ms, speed, rpm, temp, batt)
+            print_reading(elapsed_ms, jitter_us, speed, rpm, temp, batt)
 
             # --- Commit + stats every STATS_INTERVAL samples ---
             if sample_count % STATS_INTERVAL == 0:
@@ -267,9 +317,9 @@ def main():
                 print_stats(stats, sample_count)
 
             # --- Sleep until next interval (real-time scheduling) ---
+            expected_us += LOG_INTERVAL_MS * 1000
             tick_end = utime.ticks_us()
-            elapsed_this_tick_ms = utime.ticks_diff(tick_end, tick_start) // 1000
-            sleep_ms = LOG_INTERVAL_MS - elapsed_this_tick_ms
+            sleep_ms = utime.ticks_diff(expected_us, tick_end) // 1000
             if sleep_ms > 0:
                 utime.sleep_ms(sleep_ms)
 

@@ -29,8 +29,11 @@ class TestQnxPortRepository(unittest.TestCase):
             "ports/sqlite/README.md",
             "ports/micropython/Makefile",
             "ports/micropython/README.md",
+            "ports/micropython/cmodules/micropython.mk",
             "ports/micropython/cmodules/sqlite3/modsqlite3.c",
             "ports/micropython/cmodules/sqlite3/micropython.mk",
+            "ports/micropython/cmodules/qnx_rt/modqnxrt.c",
+            "ports/micropython/cmodules/qnx_rt/micropython.mk",
             "ports/micropython/patches/0001-add-qnx-platform.patch",
             "ports/micropython/patches/0002-qnx-thread-support.patch",
             "ports/micropython/patches/0003-qnx-filesystem.patch",
@@ -64,6 +67,13 @@ class TestQnxPortRepository(unittest.TestCase):
         self.assertIn("sqlite3_open_v2", modsqlite3_c)
         self.assertIn("sqlite3_prepare_v2", modsqlite3_c)
         self.assertIn("sqlite3_step", modsqlite3_c)
+
+        modqnxrt_c = (REPO_ROOT / "ports/micropython/cmodules/qnx_rt/modqnxrt.c").read_text(encoding="utf-8")
+        self.assertIn("MP_REGISTER_MODULE(MP_QSTR_qnx_rt, mp_module_qnx_rt);", modqnxrt_c)
+        self.assertIn("<sys/neutrino.h>", modqnxrt_c)
+        self.assertIn("<sys/syspage.h>", modqnxrt_c)
+        self.assertIn("ClockCycles()", modqnxrt_c)
+        self.assertIn("ClockPeriod(CLOCK_REALTIME", modqnxrt_c)
 
         patch1 = (REPO_ROOT / "ports/micropython/patches/0001-add-qnx-platform.patch").read_text(encoding="utf-8")
         self.assertIn('#define MICROPY_PLATFORM_STR "qnx"', patch1)

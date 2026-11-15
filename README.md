@@ -74,8 +74,12 @@ batt:   min=13.4  max=14.1   avg=13.8 V
 │       ├── Makefile              ← QNX cross-build Makefile
 │       ├── README.md             ← Build & run instructions
 │       ├── cmodules/
-│       │   └── sqlite3/          ← Native C `sqlite3` user module for MicroPython
-│       │       ├── modsqlite3.c  ← Wraps libsqlite3 (connect, execute, Cursor, fetch*)
+│       │   ├── micropython.mk    ← Master C modules manifest
+│       │   ├── sqlite3/          ← Native C `sqlite3` user module for MicroPython
+│       │   │   ├── modsqlite3.c  ← Wraps libsqlite3 (connect, execute, Cursor, fetch*)
+│       │   │   └── micropython.mk
+│       │   └── qnx_rt/           ← Native C `qnx_rt` module (<sys/neutrino.h>, <sys/syspage.h>)
+│       │       ├── modqnxrt.c    ← Exposes ClockCycles(), ClockPeriod(), thread priority
 │       │       └── micropython.mk
 │       └── patches/              ← QNX platform patches
 │           ├── 0001-add-qnx-platform.patch
